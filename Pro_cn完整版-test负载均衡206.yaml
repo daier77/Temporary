@@ -1,0 +1,389 @@
+# >>=====================================<<
+# ||                                     ||
+# ||      ██████╗  ██████╗  ██████╗      ||
+# ||     ██╔════╝ ██╔════╝ ██╔════╝      ||
+# ||     ███████╗ ███████╗ ███████╗      ||
+# ||     ██╔═══██╗██╔═══██╗██╔═══██╗     ||
+# ||     ╚██████╔╝╚██████╔╝╚██████╔╝     ||
+# ||      ╚═════╝  ╚═════╝  ╚═════╝      ||
+# ||                                     ||
+# >>=====================================<<
+# Pro 中文版 v2.0.6 x 《我的可莉》深度融合版 # [更新] 同步上游 v2.0.6 版本号与最新高级正则
+# 结构声明: 严格保持 Pro_cn.yaml 的 rules 路由骨架与顶层策略组命名
+# 内容声明: 完整汇入 我的可莉 的节点订阅、身份验证与底层应用逻辑
+
+# --- [Pro_cn 原有] 锚点配置 ---原配置已注释
+# x-url-test:     &url-test     { type: url-test, url: "https://www.gstatic.com/generate_204", interval: 300, empty-fallback: REJECT, include-all: true, hidden: true, tolerance: 50 }
+# x-load-balance: &load-balance { type: load-balance, url: "https://www.gstatic.com/generate_204", interval: 300, empty-fallback: REJECT, include-all: true, hidden: true, strategy: consistent-hashing }
+# x-fallback:     &fallback     { type: fallback, url: "https://www.gstatic.com/generate_204", interval: 300, empty-fallback: REJECT }
+x-base-provider: &base-provider {type: http, interval: 86400, health-check: {enable: true, url: 'https://www.google.com/generate_204', interval: 300}, filter: '^(?!.*(群|邀请|返利|循环|官网|客服|网站|网址|获取|订阅|流量|到期|机场|下次|版本|官址|备用|过期|已用|联系|邮箱|工单|贩卖|通知|倒卖|防止|国内|地址|频道|无法|说明|使用|提示|特别|访问|支持|教程|关注|更新|作者|加入|USE|USED|TOTAL|EXPIRE|EMAIL|Panel|Channel|Author))'}
+# 可莉优化配置
+# 锚点 时延优选参数 [每 6 秒一次惰性健康检查，容差 20ms，时延超过 2 秒判定为失败，失败 3 次自动触发健康检查]
+x-url-test: &url-test {type: url-test, interval: 6, tolerance: 20, lazy: true, url: 'http://www.google.com/blank.html', disable-udp: false, timeout: 2000, max-failed-times: 3, hidden: true, include-all-providers: true}
+# 锚点 负载均衡参数 [每 6 秒一次惰性健康检查，时延超过 2 秒判定为失败，失败 3 次自动触发健康检查]
+x-load-balance: &load-balance {type: load-balance, interval: 6, lazy: true, url: 'http://www.google.com/blank.html', disable-udp: false, strategy: consistent-hashing, timeout: 2000, max-failed-times: 3, hidden: true, include-all-providers: true}
+# 锚点 故障转移参数 [每 6 秒一次惰性健康检查，时延超过 2 秒判定为失败，失败 3 次自动触发健康检查]
+x-fallback: &fallback {type: fallback, interval: 6, lazy: true, url: 'http://www.google.com/blank.html', disable-udp: false, timeout: 2000, max-failed-times: 3, hidden: true, include-all-providers: true}
+# 锚点 规则参数 [每小时更新一次订阅规则，更新规则时使用直连策略]
+#RuleProviders: &RuleProviders {type: http, behavior: classical, interval: 3600, format: yaml, proxy: DIRECT}
+
+# [添加] 负载均衡节点提取锚点 (融合 Pro_cn 特性)
+x-daier-balance: &daier-balance { type: load-balance, interval: 300, strategy: consistent-hashing, use: [🫟𝑺𝒖𝒃𝒔, 免费订阅], hidden: true }
+
+x-filter-hk:    &filter-hk    "^(?i)(?=.*(香港|港深|深港|沪港|广港|陆港|(?<![a-zA-Z])(hk1|hkg)(?![a-zA-Z])|hongkong|hong kong|🇭🇰))(?!.*(排除)).*$" # [更新] v2.0.6 增强边缘断言正则与别名，彻底防止误杀
+x-filter-tw:    &filter-tw    "^(?i)(?=.*(台湾|台北|台中|台南|台东|湾湾|(?<![a-zA-Z])(tw1|tpe|khh|tsa)(?![a-zA-Z])|taiwan|taipei|🇹🇼|🇼🇸))(?!.*(排除)).*$" # [更新] v2.0.6
+x-filter-jp:    &filter-jp    "^(?i)(?=.*(日本|东京|大阪|京都|神奈川|琦玉|(?<![a-zA-Z])(jp1|nrt|hnd|kix|cts|fuk)(?![a-zA-Z])|japan|tokyo|🇯🇵))(?!.*(排除)).*$" # [更新] v2.0.6
+x-filter-sg:    &filter-sg    "^(?i)(?=.*(新加坡|坡县|坡|狮城|(?<![a-zA-Z])(sg1|sin|xsp)(?![a-zA-Z])|singapore|🇸🇬))(?!.*(排除)).*$" # [更新] v2.0.6
+x-filter-kr:    &filter-kr    "^(?i)(?=.*(韩国|韓國|首尔|首爾|南朝鲜|(?<![a-zA-Z])(kr1|icn|gmp|pus)(?![a-zA-Z])|korea|seoul|🇰🇷))(?!.*(排除)).*$" # [更新] v2.0.6
+x-filter-us:    &filter-us    "^(?i)(?=.*(美国|美东|美西|美中|美南|美港|美日|中美|美专|(?<![a-zA-Z])(us1|usa|lax|sfo|jfk|sjc)(?![a-zA-Z])|america|united states|🇺🇸))(?!.*(排除)).*$" # [更新] v2.0.6
+x-filter-it:    &filter-it    "^(?i)(?=.*(意大利|意国|米兰|罗马|(?<![a-zA-Z])(it|ita)(?![a-zA-Z])|italy|🇮🇹))(?!.*(排除)).*$"
+x-filter-other: &filter-other "^(?!.*(香港|港深|深港|沪港|广港|陆港|hk1|hkg|hongkong|hong kong|🇭🇰|台湾|台北|台中|台南|台东|湾湾|tw1|tpe|khh|tsa|taiwan|taipei|🇹🇼|🇼🇸|日本|东京|大阪|京都|神奈川|琦玉|jp1|nrt|hnd|kix|cts|fuk|japan|tokyo|🇯🇵|新加坡|坡县|坡|狮城|sg1|sin|xsp|singapore|🇸🇬|韩国|韓國|首尔|首爾|南朝鲜|kr1|icn|gmp|pus|korea|seoul|🇰🇷|美国|美东|美西|美中|美南|美港|美日|中美|美专|us1|usa|lax|sfo|jfk|sjc|america|united states|🇺🇸|意大利|意国|米兰|罗马|it|ita|italy|🇮🇹)).*$"
+
+x-rule-set-domain: &rule-set-domain { type: http, behavior: domain, format: mrs, interval: 86400 }
+x-rule-set-ipcidr: &rule-set-ipcidr { type: http, behavior: ipcidr, format: mrs, interval: 86400 }
+# [我的可莉 专属] 本地私有规则映射格式锚点
+x-rule-set-text: &rule-set-text { type: http, behavior: classical, format: text, interval: 3600 }
+
+# --- [我的可莉 专属] 节点订阅 ---
+proxy-providers:
+  🫟𝑺𝒖𝒃𝒔:
+    <<: *base-provider
+    url: 'http://192.168.31.168:8299/sb9ht4Qn0o3sv1uFqZfM/download/sub-llxx?target=ClashMeta'
+  免费订阅:
+    <<: *base-provider
+    url: 'http://192.168.31.168:8299/sb9ht4Qn0o3sv1uFqZfM/download/collection/mfjd?target=ClashMeta'
+
+# --- 基础设置 ---
+mode: rule
+port: 7890 # [融合 我的可莉]
+socks-port: 7891
+redir-port: 7893
+mixed-port: 7892
+tproxy-port: 7894
+ipv6: true # [融合 我的可莉]
+allow-lan: false
+unified-delay: true
+tcp-concurrent: true
+log-level: silent
+bind-address: '*'
+find-process-mode: 'always'
+keep-alive-interval: 15
+keep-alive-idle: 600
+authentication: 
+  - "nikki:520177" # [融合 我的可莉]
+skip-auth-prefixes: [127.0.0.1/8, '::1/128']
+experimental: {quic-go-disable-gso: true}
+
+# --- 控制面板 ---
+external-ui-url: https://github.com/Zephyruso/zashboard/releases/latest/download/dist.zip
+external-ui-name: zashboard
+external-ui: ui
+external-controller: 0.0.0.0:9090
+secret: yyds666
+profile: {store-selected: true, store-fake-ip: true}
+# 源自可莉
+geox-url:
+  # geoip: 'https://raw.githubusercontent.com/Loyalsoldier/v2ray-rules-dat/release/geoip.dat'
+  # geosite: 'https://raw.githubusercontent.com/Loyalsoldier/v2ray-rules-dat/release/geosite.dat'
+  mmdb: 'https://geodata.kelee.one/Country-Masaiki.mmdb'
+  asn: 'https://geodata.kelee.one/GeoLite2-ASN-P3TERX.mmdb'
+
+# --- 流量嗅探 ---
+sniffer:
+  enable: true
+  sniff:
+    HTTP:  {ports: [80, 8080-8880], override-destination: true}
+    TLS:   {ports: [443, 8443]}
+    QUIC:  {ports: [443, 8443]}
+  skip-domain: ["Mijia Cloud", "+.push.apple.com"]
+
+# --- TUN模式 ---
+tun:
+  enable: false
+  stack: mixed
+  dns-hijack: ["any:53", "tcp://any:53"]
+  auto-route: true
+  auto-redirect: true
+  auto-detect-interface: true
+
+# --- DNS设置 ---
+dns:
+  enable: true
+  ipv6: false
+  enhanced-mode: fake-ip
+  fake-ip-range: 198.18.0.1/16
+  default-nameserver: [119.29.29.29, 180.184.1.1, 223.5.5.5]
+  nameserver: [https://dns.alidns.com/dns-query, https://doh.pub/dns-query]
+  fake-ip-filter: ["+.lan", "*.local", "+.gstatic.com", "+.miwifi.com", "+.docker.io", "+.market.xiaomi.com", "+.push.apple.com"] # [更新] 同步 v2.0.4，补充局域网与网络检测域名白名单 (保留了你的 docker.io)
+
+# --- 代理策略组 ---
+proxy-groups:
+  # ----------------------------------------
+  # B. [我的可莉 专属逻辑] 自定义核心分组
+  # 以下全部保留了定制的图标与分类逻辑
+  # ----------------------------------------
+  - { name: 🫟流量信息🫟, type: select, use: [🫟𝑺𝒖𝒃𝒔, 免费订阅], filter: '(?i)(⏰|🟢|\d{2}/\d{2}\s\d{2}:\d{2}|流量|到期|剩余|过期)' }
+  - { name: 策略集, type: select, proxies: [🛩️机场, 📺影音, 💡低倍, 🔒解锁, 🕹️地区, 故障转移, DIRECT, 全球手动, 全球自动], icon: https://raw.githubusercontent.com/Koolson/Qure/master/IconSet/Color/Proxy.png }
+  - { name: 🛩️机场, type: select, proxies: [🚁YKK♻️, 🚁赔钱♻️, 🚁良心♻️, 🚁免费♻️], hidden: true, icon: https://raw.githubusercontent.com/Koolson/Qure/master/IconSet/Color/Airport.png }
+  - { name: 📺影音, type: select, proxies: [emby-🇯🇵♻️, emby+🇯🇵♻️, YouTube📵广告♻️], hidden: true, icon: https://raw.githubusercontent.com/Koolson/Qure/master/IconSet/Color/Streaming.png }
+  - { name: 💡低倍, type: select, proxies: [🌍𝗔𝗟𝗟-低倍♻️, 📺𝗡𝗝𝗣-低倍♻️], hidden: true, icon: https://raw.githubusercontent.com/Koolson/Qure/master/IconSet/Color/Rocket.png }
+  - { name: 🔒解锁, type: select, proxies: [TikTok🔓♻️, YouTube🔓♻️, Gemini🔓♻️, GPT🔓♻️, X🔓♻️], hidden: true, icon: https://raw.githubusercontent.com/Koolson/Qure/master/IconSet/Color/Unlock.png }
+  - { name: 🕹️地区, type: select, proxies: [香港♻️, 台湾♻️, 日本♻️, 韩国♻️, 新国♻️, 美国♻️, 意国♻️, 其它♻️], hidden: true, icon: https://raw.githubusercontent.com/Koolson/Qure/master/IconSet/Color/World_Map.png }
+
+  # 自动选择与手动 (Pro_cn 原有结构)
+  - { name: 故障转移, <<: *fallback, proxies: [美国♻️, 日本♻️, 新国♻️, 韩国♻️, 香港♻️, 台湾♻️], icon: https://github.com/Koolson/Qure/raw/master/IconSet/Color/ULB.png }
+  - { name: 全球手动, type: select, include-all: true, icon: https://github.com/Koolson/Qure/raw/master/IconSet/Color/Clubhouse.png }
+  - { name: 全球自动, <<: *url-test, include-all: true, icon: https://raw.githubusercontent.com/Koolson/Qure/master/IconSet/Color/Auto.png }
+  
+  - { name: 𝒇𝒐𝒓𝒘𝒂𝒓𝒅, type: select, proxies: [策略集, 🚁赔钱♻️, 🚁良心♻️, 🚁免费♻️, 故障转移, DIRECT, 全球手动, 全球自动], icon: https://raw.githubusercontent.com/lige47/QuanX-icon-rule/main/icon/03CNSoft/forward.png }
+  - { name: 魔法𝒆𝒎𝒃𝒚, type: select, proxies: [策略集, emby-🇯🇵♻️, emby+🇯🇵♻️, 📺𝗡𝗝𝗣-低倍♻️, 🚁YKK♻️, 🚁赔钱♻️, 🚁良心♻️, 🚁免费♻️], icon: https://raw.githubusercontent.com/lige47/QuanX-icon-rule/main/icon/emby/shouhou(10)SNTP-emby.png }
+  - { name: 直连𝒆𝒎𝒃𝒚, type: select, proxies: [DIRECT, 策略集, emby-🇯🇵♻️, emby+🇯🇵♻️, 📺𝗡𝗝𝗣-低倍♻️, 🚁YKK♻️, 🚁赔钱♻️, 🚁良心♻️, 🚁免费♻️], icon: https://emby-icon.vercel.app/icons/YounoPlus.PNG }
+  - { name: 𝑫♾️𝑷𝒆𝒎𝒃𝒚, type: select, proxies: [DIRECT, 策略集, emby-🇯🇵♻️, emby+🇯🇵♻️, 📺𝗡𝗝𝗣-低倍♻️, 🚁YKK♻️, 🚁赔钱♻️, 🚁良心♻️, 🚁免费♻️], icon: https://raw.githubusercontent.com/sooyaaabo/IconLibrary/main/Emby/SaturDayXperience-02.png }
+  - { name: 直连𝒂𝒑𝒕𝒗, type: select, proxies: [DIRECT, 策略集, 🌍𝗔𝗟𝗟-低倍♻️, 台湾♻️, 香港♻️, 🚁赔钱♻️, 🚁良心♻️, 🚁免费♻️], icon: https://raw.githubusercontent.com/fmz200/wool_scripts/main/icons/apps/Apple_01.png }
+  - { name: 魔法𝒂𝒑𝒕𝒗, type: select, proxies: [策略集, 🌍𝗔𝗟𝗟-低倍♻️, 台湾♻️, 香港♻️, 🚁赔钱♻️, 🚁良心♻️, 🚁免费♻️, DIRECT], icon: https://raw.githubusercontent.com/fmz200/wool_scripts/main/icons/apps/Apple_02.png }
+  - { name: 𝑺𝒑𝒆𝒆𝒅𝒕𝒆𝒔𝒕国际, type: select, proxies: [策略集, DIRECT], icon: https://raw.githubusercontent.com/Koolson/Qure/master/IconSet/Color/Speedtest.png }
+  - { name: TikTok, type: select, proxies: [策略集, TikTok🔓♻️, 美国♻️, 新国♻️, 日本♻️, 台湾♻️], icon: https://raw.githubusercontent.com/Koolson/Qure/master/IconSet/Color/TikTok.png }
+  - { name: YouTube, type: select, proxies: [策略集, YouTube📵广告♻️, YouTube🔓♻️, 🌍𝗔𝗟𝗟-低倍♻️, 🚁赔钱♻️, 🚁良心♻️, 🚁免费♻️], icon: https://raw.githubusercontent.com/Koolson/Qure/master/IconSet/Color/YouTube.png }
+  - { name: Telegram, type: select, proxies: [策略集, 🌍𝗔𝗟𝗟-低倍♻️, 新国♻️, 🚁YKK♻️, 🚁赔钱♻️, 🚁良心♻️], icon: https://raw.githubusercontent.com/Koolson/Qure/master/IconSet/Color/Telegram.png }
+  - { name: Twitter, type: select, proxies: [策略集, X🔓♻️, 美国♻️, 新国♻️, 日本♻️, 台湾♻️], icon: https://raw.githubusercontent.com/Koolson/Qure/master/IconSet/Color/Twitter.png }
+  - { name: Gemini, type: select, proxies: [策略集, Gemini🔓♻️, 🚁YKK♻️, 新国♻️, 美国♻️], icon: https://raw.githubusercontent.com/lige47/QuanX-icon-rule/main/icon/04ProxySoft/gemini(1).png }
+  - { name: OpenAI, type: select, proxies: [策略集, GPT🔓♻️, 🚁YKK♻️, 新国♻️, 美国♻️], icon: https://raw.githubusercontent.com/Koolson/Qure/master/IconSet/Color/ChatGPT.png }
+  - { name: Claude, type: select, proxies: [策略集, 🚁YKK♻️, 新国♻️, 美国♻️], icon: https://raw.githubusercontent.com/lige47/QuanX-icon-rule/main/icon/04ProxySoft/claude(1).png }
+  - { name: Porn, type: select, proxies: [策略集, 日本♻️, 新国♻️, 美国♻️], icon: https://raw.githubusercontent.com/Koolson/Qure/master/IconSet/Color/Pornhub.png }
+
+  # ----------------------------------------
+  # A. [Pro_cn 原有结构] 承接下方规则区的标准路由策略
+  # 内容已平滑融合为 我的可莉 的专属 UI 与代理组
+  # ----------------------------------------
+  #- { name: 广告拦截, type: select, proxies: [REJECT-DROP, REJECT, DIRECT], icon: https://github.com/Koolson/Qure/raw/master/IconSet/Color/Reject.png }
+  #- { name: 即时通讯, type: select, proxies: [策略集, 🌍𝗔𝗟𝗟-低倍♻️, 新国♻️, 🚁YKK♻️, 🚁赔钱♻️, 🚁良心♻️], icon: https://github.com/Koolson/Qure/raw/master/IconSet/Color/Telegram_X.png }
+  #- { name: 社交平台, type: select, proxies: [策略集, X🔓♻️, 美国♻️, 新国♻️, 日本♻️, 台湾♻️], icon: https://github.com/Koolson/Qure/raw/master/IconSet/Color/Twitter.png }
+  #- { name: 人工智能, type: select, proxies: [策略集, Gemini🔓♻️, GPT🔓♻️, 🚁YKK♻️, 新国♻️, 美国♻️], icon: https://github.com/Koolson/Qure/raw/master/IconSet/Color/AI.png }
+  #- { name: 开发服务, type: select, proxies: [策略集, DIRECT, 美国♻️, 新国♻️, 日本♻️, 台湾♻️], icon: https://github.com/Koolson/Qure/raw/master/IconSet/Color/GitHub.png }
+  - { name: EMBY,    type: select, proxies: [魔法𝒆𝒎𝒃𝒚, 直连𝒆𝒎𝒃𝒚, 𝑫♾️𝑷𝒆𝒎𝒃𝒚, 策略集], icon: https://github.com/Koolson/Qure/raw/master/IconSet/Color/Emby.png }
+  #- { name: 国际媒体, type: select, proxies: [策略集, YouTube📵广告♻️, YouTube🔓♻️, TikTok🔓♻️, 🌍𝗔𝗟𝗟-低倍♻️, 🚁赔钱♻️, 🚁良心♻️, 🚁免费♻️], icon: https://github.com/Koolson/Qure/raw/master/IconSet/Color/Streaming.png }
+  - { name: 谷歌服务, type: select, proxies: [策略集, DIRECT], icon: https://github.com/Koolson/Qure/raw/master/IconSet/Color/Google_Search.png }
+  - { name: 脸书服务, type: select, proxies: [策略集, DIRECT], icon: https://github.com/Koolson/Qure/raw/master/IconSet/Color/Facebook.png }
+  - { name: 微软服务, type: select, proxies: [策略集, DIRECT], icon: https://github.com/Koolson/Qure/raw/master/IconSet/Color/Microsoft.png }
+  - { name: 苹果服务, type: select, proxies: [DIRECT, 策略集], icon: https://github.com/Koolson/Qure/raw/master/IconSet/Color/Apple_1.png }
+  - { name: 国外流量, type: select, proxies: [策略集, DIRECT], icon: https://github.com/Koolson/Qure/raw/master/IconSet/Color/Global.png }
+  - { name: 国内流量, type: select, proxies: [DIRECT, 策略集], icon: https://github.com/Koolson/Qure/raw/master/IconSet/Color/China.png }
+  - { name: 漏网之鱼, type: select, proxies: [策略集, DIRECT], icon: https://github.com/Koolson/Qure/raw/master/IconSet/Color/Final.png }
+  
+  # ----------------------------------------
+  # C. [我的可莉 专属逻辑] 策略包装组 (支持自动/均衡/手动) # [添加]
+  # ----------------------------------------
+  - { name: 香港♻️, type: select, use: [🫟𝑺𝒖𝒃𝒔, 免费订阅], filter: *filter-hk, proxies: [香港自动, 香港均衡], icon: https://raw.githubusercontent.com/Koolson/Qure/master/IconSet/Color/Hong_Kong.png } # [更新] v2.0.6
+  - { name: 台湾♻️, type: select, use: [🫟𝑺𝒖𝒃𝒔, 免费订阅], filter: *filter-tw, proxies: [台湾自动, 台湾均衡], icon: https://raw.githubusercontent.com/Koolson/Qure/master/IconSet/Color/Taiwan.png } # [更新] v2.0.6
+  - { name: 日本♻️, type: select, use: [🫟𝑺𝒖𝒃𝒔, 免费订阅], filter: *filter-jp, proxies: [日本自动, 日本均衡], icon: https://raw.githubusercontent.com/Koolson/Qure/master/IconSet/Color/Japan.png } # [更新] v2.0.6
+  - { name: 韩国♻️, type: select, use: [🫟𝑺𝒖𝒃𝒔, 免费订阅], filter: *filter-kr, proxies: [韩国自动, 韩国均衡], icon: https://raw.githubusercontent.com/Koolson/Qure/master/IconSet/Color/Korea.png } # [更新] v2.0.6
+  - { name: 新国♻️, type: select, use: [🫟𝑺𝒖𝒃𝒔, 免费订阅], filter: *filter-sg, proxies: [新国自动, 新国均衡], icon: https://raw.githubusercontent.com/Koolson/Qure/master/IconSet/Color/Singapore.png } # [更新] v2.0.6
+  - { name: 美国♻️, type: select, use: [🫟𝑺𝒖𝒃𝒔, 免费订阅], filter: *filter-us, proxies: [美国自动, 美国均衡], icon: https://raw.githubusercontent.com/Koolson/Qure/master/IconSet/Color/United_States.png } # [更新] v2.0.6
+  - { name: 意国♻️, type: select, use: [🫟𝑺𝒖𝒃𝒔, 免费订阅], filter: *filter-it, proxies: [意国自动, 意国均衡], icon: https://raw.githubusercontent.com/Koolson/Qure/master/IconSet/Color/Italy.png }
+  - { name: 其它♻️, type: select, use: [🫟𝑺𝒖𝒃𝒔, 免费订阅], filter: *filter-other, proxies: [其它自动, 其它均衡], icon: https://raw.githubusercontent.com/Koolson/Qure/master/IconSet/Color/World_Map.png }
+
+  - { name: 🚁YKK♻️, type: select, use: [🫟𝑺𝒖𝒃𝒔, 免费订阅], filter: 'YKK', proxies: [🚁YKK自动, 🚁YKK均衡] }
+  - { name: 🚁良心♻️, type: select, use: [🫟𝑺𝒖𝒃𝒔, 免费订阅], filter: '良心', proxies: [🚁良心自动, 🚁良心均衡] }
+  - { name: 🚁赔钱♻️, type: select, use: [🫟𝑺𝒖𝒃𝒔, 免费订阅], filter: '赔钱', proxies: [🚁赔钱自动, 🚁赔钱均衡] }
+  - { name: 🚁免费♻️, type: select, use: [免费订阅], filter: '(?i)(免费|Free)', proxies: [🚁免费自动, 🚁免费均衡] }
+
+  - { name: emby-🇯🇵♻️, type: select, use: [🫟𝑺𝒖𝒃𝒔, 免费订阅], filter: '^(?!.*(日本|JP|Japan|🇯🇵)).*(良心|赔钱).*$', proxies: [emby-🇯🇵自动, emby-🇯🇵均衡] }
+  - { name: emby+🇯🇵♻️, type: select, use: [🫟𝑺𝒖𝒃𝒔, 免费订阅], filter: '良心|赔钱', proxies: [emby+🇯🇵自动, emby+🇯🇵均衡] }
+  - { name: YouTube📵广告♻️, type: select, use: [🫟𝑺𝒖𝒃𝒔, 免费订阅], filter: '^(?=.*YT-CN)(?!.*YKK).*', proxies: [YouTube📵广告自动, YouTube📵广告均衡] }
+
+  - { name: 🌍𝗔𝗟𝗟-低倍♻️, type: select, use: [🫟𝑺𝒖𝒃𝒔, 免费订阅], filter: '0.01|0.1|0.5', proxies: [🌍𝗔𝗟𝗟-低倍自动, 🌍𝗔𝗟𝗟-低倍均衡] }
+  - { name: 📺𝗡𝗝𝗣-低倍♻️, type: select, use: [🫟𝑺𝒖𝒃𝒔, 免费订阅], filter: '^(?!.*(日本|JP|Japan|🇯🇵)).*(0.01|0.1|0.5).*$', proxies: [📺𝗡𝗝𝗣-低倍自动, 📺𝗡𝗝𝗣-低倍均衡] }
+
+  - { name: TikTok🔓♻️, type: select, use: [🫟𝑺𝒖𝒃𝒔, 免费订阅], filter: 'TK', proxies: [TikTok🔓自动, TikTok🔓均衡] }
+  - { name: YouTube🔓♻️, type: select, use: [🫟𝑺𝒖𝒃𝒔, 免费订阅], filter: 'YT', proxies: [YouTube🔓自动, YouTube🔓均衡] }
+  - { name: Gemini🔓♻️, type: select, use: [🫟𝑺𝒖𝒃𝒔, 免费订阅], filter: 'GM', proxies: [Gemini🔓自动, Gemini🔓均衡] }
+  - { name: GPT🔓♻️, type: select, use: [🫟𝑺𝒖𝒃𝒔, 免费订阅], filter: 'GPT', proxies: [GPT🔓自动, GPT🔓均衡] }
+  - { name: X🔓♻️, type: select, use: [🫟𝑺𝒖𝒃𝒔, 免费订阅], filter: 'X', proxies: [X🔓自动, X🔓均衡] }
+
+  # ----------------------------------------
+  # D. [我的可莉 专属逻辑] 自动测速提取组 (Auto)
+  # ----------------------------------------
+  - { name: 香港自动, <<: *url-test, include-all: false, use: [🫟𝑺𝒖𝒃𝒔, 免费订阅], filter: *filter-hk, icon: https://github.com/Koolson/Qure/raw/master/IconSet/Color/Auto.png } # [更新] v2.0.6
+  - { name: 台湾自动, <<: *url-test, include-all: false, use: [🫟𝑺𝒖𝒃𝒔, 免费订阅], filter: *filter-tw, icon: https://github.com/Koolson/Qure/raw/master/IconSet/Color/Auto.png } # [更新] v2.0.6
+  - { name: 日本自动, <<: *url-test, include-all: false, use: [🫟𝑺𝒖𝒃𝒔, 免费订阅], filter: *filter-jp, icon: https://github.com/Koolson/Qure/raw/master/IconSet/Color/Auto.png } # [更新] v2.0.6
+  - { name: 韩国自动, <<: *url-test, include-all: false, use: [🫟𝑺𝒖𝒃𝒔, 免费订阅], filter: *filter-kr, icon: https://github.com/Koolson/Qure/raw/master/IconSet/Color/Auto.png } # [更新] v2.0.6
+  - { name: 新国自动, <<: *url-test, include-all: false, use: [🫟𝑺𝒖𝒃𝒔, 免费订阅], filter: *filter-sg, icon: https://github.com/Koolson/Qure/raw/master/IconSet/Color/Auto.png } # [更新] v2.0.6
+  - { name: 美国自动, <<: *url-test, include-all: false, use: [🫟𝑺𝒖𝒃𝒔, 免费订阅], filter: *filter-us, icon: https://github.com/Koolson/Qure/raw/master/IconSet/Color/Auto.png } # [更新] v2.0.6
+  - { name: 意国自动, <<: *url-test, include-all: false, use: [🫟𝑺𝒖𝒃𝒔, 免费订阅], filter: *filter-it, icon: https://raw.githubusercontent.com/Koolson/Qure/master/IconSet/Color/Auto.png }
+  - { name: 其它自动, <<: *url-test, include-all: false, use: [🫟𝑺𝒖𝒃𝒔, 免费订阅], filter: *filter-other, icon: https://raw.githubusercontent.com/Koolson/Qure/master/IconSet/Color/Auto.png }
+
+  - { name: 🚁YKK自动, <<: *url-test, include-all: false, use: [🫟𝑺𝒖𝒃𝒔, 免费订阅], filter: 'YKK', icon: https://github.com/Koolson/Qure/raw/master/IconSet/Color/Auto.png }
+  - { name: 🚁良心自动, <<: *url-test, include-all: false, use: [🫟𝑺𝒖𝒃𝒔, 免费订阅], filter: '良心', icon: https://github.com/Koolson/Qure/raw/master/IconSet/Color/Auto.png }
+  - { name: 🚁赔钱自动, <<: *url-test, include-all: false, use: [🫟𝑺𝒖𝒃𝒔, 免费订阅], filter: '赔钱', icon: https://github.com/Koolson/Qure/raw/master/IconSet/Color/Auto.png }
+  - { name: 🚁免费自动, <<: *url-test, include-all: false, use: [免费订阅], filter: '(?i)(免费|Free)', icon: https://github.com/Koolson/Qure/raw/master/IconSet/Color/Auto.png }
+  - { name: emby-🇯🇵自动, <<: *url-test, include-all: false, use: [🫟𝑺𝒖𝒃𝒔, 免费订阅], filter: '^(?!.*(日本|JP|Japan|🇯🇵)).*(良心|赔钱).*$', icon: https://github.com/Koolson/Qure/raw/master/IconSet/Color/Auto.png }
+  - { name: emby+🇯🇵自动, <<: *url-test, include-all: false, use: [🫟𝑺𝒖𝒃𝒔, 免费订阅], filter: '良心|赔钱', icon: https://github.com/Koolson/Qure/raw/master/IconSet/Color/Auto.png }
+  - { name: YouTube📵广告自动, <<: *url-test, include-all: false, use: [🫟𝑺𝒖𝒃𝒔, 免费订阅], filter: '^(?=.*YT-CN)(?!.*YKK).*', icon: https://github.com/Koolson/Qure/raw/master/IconSet/Color/Auto.png }
+  - { name: 🌍𝗔𝗟𝗟-低倍自动, <<: *url-test, include-all: false, use: [🫟𝑺𝒖𝒃𝒔, 免费订阅], filter: '0.01|0.1|0.5', icon: https://github.com/Koolson/Qure/raw/master/IconSet/Color/Auto.png }
+  - { name: 📺𝗡𝗝𝗣-低倍自动, <<: *url-test, include-all: false, use: [🫟𝑺𝒖𝒃𝒔, 免费订阅], filter: '^(?!.*(日本|JP|Japan|🇯🇵)).*(0.01|0.1|0.5).*$', icon: https://github.com/Koolson/Qure/raw/master/IconSet/Color/Auto.png }
+  - { name: TikTok🔓自动, <<: *url-test, include-all: false, use: [🫟𝑺𝒖𝒃𝒔, 免费订阅], filter: 'TK', icon: https://github.com/Koolson/Qure/raw/master/IconSet/Color/Auto.png }
+  - { name: YouTube🔓自动, <<: *url-test, include-all: false, use: [🫟𝑺𝒖𝒃𝒔, 免费订阅], filter: 'YT', icon: https://github.com/Koolson/Qure/raw/master/IconSet/Color/Auto.png }
+  - { name: Gemini🔓自动, <<: *url-test, include-all: false, use: [🫟𝑺𝒖𝒃𝒔, 免费订阅], filter: 'GM', icon: https://github.com/Koolson/Qure/raw/master/IconSet/Color/Auto.png }
+  - { name: GPT🔓自动, <<: *url-test, include-all: false, use: [🫟𝑺𝒖𝒃𝒔, 免费订阅], filter: 'GPT', icon: https://github.com/Koolson/Qure/raw/master/IconSet/Color/Auto.png }
+  - { name: X🔓自动, <<: *url-test, include-all: false, use: [🫟𝑺𝒖𝒃𝒔, 免费订阅], filter: 'X', icon: https://github.com/Koolson/Qure/raw/master/IconSet/Color/Auto.png }
+
+  # ----------------------------------------
+  # E. [我的可莉 专属逻辑] 负载均衡提取组 (Balance) # [添加]
+  # ----------------------------------------
+  - { name: 香港均衡, <<: *daier-balance, filter: *filter-hk } # [更新] v2.0.6
+  - { name: 台湾均衡, <<: *daier-balance, filter: *filter-tw } # [更新] v2.0.6
+  - { name: 日本均衡, <<: *daier-balance, filter: *filter-jp } # [更新] v2.0.6
+  - { name: 韩国均衡, <<: *daier-balance, filter: *filter-kr } # [更新] v2.0.6
+  - { name: 新国均衡, <<: *daier-balance, filter: *filter-sg } # [更新] v2.0.6
+  - { name: 美国均衡, <<: *daier-balance, filter: *filter-us } # [更新] v2.0.6
+  - { name: 意国均衡, <<: *daier-balance, filter: *filter-it }
+  - { name: 其它均衡, <<: *daier-balance, filter: *filter-other }
+
+  - { name: 🚁YKK均衡, <<: *daier-balance, filter: 'YKK' }
+  - { name: 🚁良心均衡, <<: *daier-balance, filter: '良心' }
+  - { name: 🚁赔钱均衡, <<: *daier-balance, filter: '赔钱' }
+  - { name: 🚁免费均衡, <<: *daier-balance, use: [免费订阅], filter: '(?i)(免费|Free)' }
+  - { name: emby-🇯🇵均衡, <<: *daier-balance, filter: '^(?!.*(日本|JP|Japan|🇯🇵)).*(良心|赔钱).*$' }
+  - { name: emby+🇯🇵均衡, <<: *daier-balance, filter: '良心|赔钱' }
+  - { name: YouTube📵广告均衡, <<: *daier-balance, filter: '^(?=.*YT-CN)(?!.*YKK).*' }
+  - { name: 🌍𝗔𝗟𝗟-低倍均衡, <<: *daier-balance, filter: '0.01|0.1|0.5' }
+  - { name: 📺𝗡𝗝𝗣-低倍均衡, <<: *daier-balance, filter: '^(?!.*(日本|JP|Japan|🇯🇵)).*(0.01|0.1|0.5).*$' }
+  - { name: TikTok🔓均衡, <<: *daier-balance, filter: 'TK' }
+  - { name: YouTube🔓均衡, <<: *daier-balance, filter: 'YT' }
+  - { name: Gemini🔓均衡, <<: *daier-balance, filter: 'GM' }
+  - { name: GPT🔓均衡, <<: *daier-balance, filter: 'GPT' }
+  - { name: X🔓均衡, <<: *daier-balance, filter: 'X' }
+
+# --- 规则集提供者 ---
+rule-providers:
+
+  # [定制规则扩展] -> Gemini
+  TikTok:         { <<: *rule-set-domain, url: https://github.com/666OS/rules/raw/release/mihomo/domain/TikTok.mrs }
+  YouTube:        { <<: *rule-set-domain, url: https://github.com/666OS/rules/raw/release/mihomo/domain/YouTube.mrs }
+  Twitter:        { <<: *rule-set-domain, url: https://github.com/666OS/rules/raw/release/mihomo/domain/Twitter.mrs }
+  Gemini:         { <<: *rule-set-domain, url: https://github.com/666OS/rules/raw/release/mihomo/domain/Gemini.mrs }
+  OpenAI:         { <<: *rule-set-domain, url: https://github.com/666OS/rules/raw/release/mihomo/domain/OpenAI.mrs }
+  Claude:         { <<: *rule-set-domain, url: https://github.com/666OS/rules/raw/release/mihomo/domain/Claude.mrs }
+  Porn:           { <<: *rule-set-domain, url: https://github.com/666OS/rules/raw/release/mihomo/domain/Porn.mrs }
+  
+  # [Pro_cn 骨架保留] 高性能 MRS
+  #Tracking:       { <<: *rule-set-domain, url: https://github.com/666OS/rules/raw/release/mihomo/domain/Tracking.mrs }
+  #Advertising:    { <<: *rule-set-domain, url: https://github.com/666OS/rules/raw/release/mihomo/domain/Advertising.mrs } 
+  Private:        { <<: *rule-set-domain, url: https://github.com/666OS/rules/raw/release/mihomo/domain/Private.mrs }
+  Apple:          { <<: *rule-set-domain, url: https://github.com/666OS/rules/raw/release/mihomo/domain/Apple.mrs }
+  Telegram:       { <<: *rule-set-domain, url: https://github.com/666OS/rules/raw/release/mihomo/domain/Telegram.mrs }
+  TM:             { <<: *rule-set-domain, url: https://github.com/666OS/rules/raw/release/mihomo/domain/TM.mrs }
+  SocialMedia:    { <<: *rule-set-domain, url: https://github.com/666OS/rules/raw/release/mihomo/domain/SocialMedia.mrs }
+  AI:             { <<: *rule-set-domain, url: https://github.com/666OS/rules/raw/release/mihomo/domain/AI.mrs }
+  Dev:            { <<: *rule-set-domain, url: https://github.com/666OS/rules/raw/release/mihomo/domain/Dev.mrs }
+  #Netflix:        { <<: *rule-set-domain, url: https://github.com/666OS/rules/raw/release/mihomo/domain/Netflix.mrs }
+  #Spotify:        { <<: *rule-set-domain, url: https://github.com/666OS/rules/raw/release/mihomo/domain/Spotify.mrs }
+  #Disney:         { <<: *rule-set-domain, url: https://github.com/666OS/rules/raw/release/mihomo/domain/Disney.mrs }
+  Emby:           { <<: *rule-set-domain, url: https://github.com/666OS/rules/raw/release/mihomo/domain/Emby.mrs }
+  Streaming:      { <<: *rule-set-domain, url: https://github.com/666OS/rules/raw/release/mihomo/domain/Streaming.mrs }
+  Proxy:          { <<: *rule-set-domain, url: https://github.com/666OS/rules/raw/release/mihomo/domain/Proxy.mrs }
+  China:          { <<: *rule-set-domain, url: https://github.com/666OS/rules/raw/release/mihomo/domain/China.mrs }
+  Speedtest:      { <<: *rule-set-domain, url: https://github.com/666OS/rules/raw/release/mihomo/domain/Speedtest.mrs }
+  Google:         { <<: *rule-set-domain, url: https://github.com/666OS/rules/raw/release/mihomo/domain/Google.mrs }
+  Microsoft:      { <<: *rule-set-domain, url: https://github.com/666OS/rules/raw/release/mihomo/domain/Microsoft.mrs }
+  Facebook:       { <<: *rule-set-domain, url: https://github.com/666OS/rules/raw/release/mihomo/domain/Facebook.mrs }
+  PrivateIP:      { <<: *rule-set-ipcidr, url: https://github.com/666OS/rules/raw/release/mihomo/ip/Private.mrs }
+  TelegramIP:     { <<: *rule-set-ipcidr, url: https://github.com/666OS/rules/raw/release/mihomo/ip/Telegram.mrs }
+  SocialMediaIP:  { <<: *rule-set-ipcidr, url: https://github.com/666OS/rules/raw/release/mihomo/ip/SocialMedia.mrs }
+  AIIP:           { <<: *rule-set-ipcidr, url: https://github.com/666OS/rules/raw/release/mihomo/ip/AI.mrs }
+  #NetflixIP:      { <<: *rule-set-ipcidr, url: https://github.com/666OS/rules/raw/release/mihomo/ip/Netflix.mrs }
+  EmbyIP:         { <<: *rule-set-ipcidr, url: https://github.com/666OS/rules/raw/release/mihomo/ip/Emby.mrs }
+  StreamingIP:    { <<: *rule-set-ipcidr, url: https://github.com/666OS/rules/raw/release/mihomo/ip/Streaming.mrs }
+  ProxyIP:        { <<: *rule-set-ipcidr, url: https://github.com/666OS/rules/raw/release/mihomo/ip/Proxy.mrs }
+  ChinaIP:        { <<: *rule-set-ipcidr, url: https://github.com/666OS/rules/raw/release/mihomo/ip/China.mrs }
+  GoogleIP:       { <<: *rule-set-ipcidr, url: https://github.com/666OS/rules/raw/release/mihomo/ip/Google.mrs }
+
+
+
+  # [我的可莉 专属] 局域网分流挂载
+  Forward_List:  { <<: *rule-set-text, url: 'http://192.168.31.168:3131/Daier/baby/raw/branch/main/forward.list' }
+  Docker_Direct: { <<: *rule-set-text, url: 'http://192.168.31.168:3131/Daier/baby/raw/branch/main/DIRECTdocker.list' }
+  Docker_Proxy:  { <<: *rule-set-text, url: 'http://192.168.31.168:3131/Daier/baby/raw/branch/main/PROXYdocker.list' }
+  APTV_Direct:   { <<: *rule-set-text, url: 'http://192.168.31.168:3131/Daier/baby/raw/branch/main/DIRECTaptv.list' }
+  APTV_Proxy:    { <<: *rule-set-text, url: 'http://192.168.31.168:3131/Daier/baby/raw/branch/main/PROXYaptv.list' }
+  Emby_Direct:   { <<: *rule-set-text, url: 'http://192.168.31.168:3131/Daier/baby/raw/branch/main/DIRECTemby.list' }
+  DorPemby:      { <<: *rule-set-text, url: 'http://192.168.31.168:3131/Daier/baby/raw/branch/main/DorPemby.list' }
+  Emby_Proxy:    { <<: *rule-set-text, url: 'http://192.168.31.168:3131/Daier/baby/raw/branch/main/PROXYemby.list' }
+
+# 规则路由
+rules:
+  # [我的可莉 专属] 强制无感直连
+  #- WIFI-SSID,Synology_5G,DIRECT
+
+  # 广告拦截
+  #- RULE-SET,Tracking,广告拦截
+  #- RULE-SET,Advertising,广告拦截
+  #- AND,((NETWORK,UDP),(DST-PORT,443),(NOT,((GEOIP,CN,no-resolve)))),广告拦截
+  
+  # 本地/私有
+  # [这里补入 我的可莉 局域网分流，确保优先通过]
+  - RULE-SET,Forward_List,𝒇𝒐𝒓𝒘𝒂𝒓𝒅
+  - RULE-SET,Docker_Direct,DIRECT
+  - RULE-SET,Docker_Proxy,魔法𝒆𝒎𝒃𝒚
+  - RULE-SET,APTV_Direct,直连𝒂𝒑𝒕𝒗
+  - RULE-SET,APTV_Proxy,魔法𝒂𝒑𝒕𝒗
+  - RULE-SET,Emby_Direct,直连𝒆𝒎𝒃𝒚
+  - RULE-SET,DorPemby,𝑫♾️𝑷𝒆𝒎𝒃𝒚
+  - RULE-SET,Emby_Proxy,魔法𝒆𝒎𝒃𝒚
+  # [恢复 Pro_cn 原有规则]
+  - RULE-SET,Private,DIRECT
+  - RULE-SET,PrivateIP,DIRECT,no-resolve
+
+  # 自定义应用规则补全
+  - RULE-SET,TikTok,TikTok
+  - RULE-SET,YouTube,YouTube
+  - RULE-SET,Telegram,Telegram
+  - RULE-SET,Twitter,Twitter
+  - RULE-SET,Gemini,Gemini
+  - RULE-SET,OpenAI,OpenAI
+  - RULE-SET,Claude,Claude
+  - RULE-SET,Porn,Porn
+
+
+  # 网络测试
+  - RULE-SET,Speedtest,𝑺𝒑𝒆𝒆𝒅𝒕𝒆𝒔𝒕国际
+
+  # 即时通讯
+  #- RULE-SET,TM,即时通讯
+  #- RULE-SET,Telegram,即时通讯
+  #- RULE-SET,TelegramIP,即时通讯,no-resolve
+
+  # 社交平台
+  #- RULE-SET,SocialMedia,社交平台
+  #- RULE-SET,SocialMediaIP,社交平台,no-resolve
+
+  # 人工智能
+  #- RULE-SET,AI,人工智能
+  #- RULE-SET,AIIP,人工智能,no-resolve
+
+  # 开发服务
+  #- RULE-SET,Dev,开发服务
+
+  # 国际媒体
+  - RULE-SET,Emby,EMBY
+  - RULE-SET,EmbyIP,EMBY,no-resolve
+  #- RULE-SET,Streaming,国际媒体
+  #- RULE-SET,StreamingIP,国际媒体,no-resolve
+
+  # 平台服务 # [更新] 分类名称同步官方更新为“平台服务”
+  - RULE-SET,Google,谷歌服务
+  - RULE-SET,GoogleIP,谷歌服务,no-resolve
+  - RULE-SET,Microsoft,微软服务
+  - RULE-SET,Facebook,脸书服务
+  - RULE-SET,Apple,苹果服务
+
+  # 国外流量
+  - RULE-SET,Proxy,国外流量
+  - RULE-SET,ProxyIP,国外流量,no-resolve
+
+  # 国内流量
+  - RULE-SET,China,国内流量
+  - RULE-SET,ChinaIP,国内流量,no-resolve
+
+  # 兜底规则
+  - MATCH,漏网之鱼
