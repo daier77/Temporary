@@ -1,0 +1,312 @@
+# >>=====================================<<
+# ||                                     ||
+# ||      ██████╗  ██████╗  ██████╗      ||
+# ||     ██╔════╝ ██╔════╝ ██╔════╝      ||
+# ||     ███████╗ ███████╗ ███████╗      ||
+# ||     ██╔═══██╗██╔═══██╗██╔═══██╗     ||
+# ||     ╚██████╔╝╚██████╔╝╚██████╔╝     ||
+# ||      ╚═════╝  ╚═════╝  ╚═════╝      ||
+# ||                                     ||
+# >>=====================================<<
+# Pro 中文版 v2.0.6 by YYDS666 (2026-07-11)
+# 项目: https://github.com/666OS/YYDS | 频道: https://t.me/Pinched666
+# 请在 proxy-providers 中添加您的订阅链接，或在 proxies 中添加自定义节点
+
+
+# >>> 锚点配置区域 <<<
+# 锚点相当于编程中的变量，在此处定义好通用参数后，下方可以重复引用，避免重复编写
+# 定义订阅节点的基础参数。设定每 86400 秒 (24小时) 更新一次，每 300 秒进行一次健康检查，并利用正则过滤掉包含“群”、“过期”等无关词汇的废弃节点
+x-base-provider: &base-provider {type: http, interval: 86400, health-check: {enable: true, url: 'https://www.google.com/generate_204', interval: 300}, filter: '^(?!.*(群|邀请|返利|循环|官网|客服|网站|网址|获取|订阅|流量|到期|机场|下次|版本|官址|备用|过期|已用|联系|邮箱|工单|贩卖|通知|倒卖|防止|国内|地址|频道|无法|说明|使用|提示|特别|访问|支持|教程|关注|更新|作者|加入|USE|USED|TOTAL|EXPIRE|EMAIL|Panel|Channel|Author))'}
+# 自动测速锚点。每 300 秒测试一次节点延迟，自动选择延迟最低的节点
+x-url-test:     &url-test     { type: url-test, url: "https://www.gstatic.com/generate_204", interval: 300, empty-fallback: REJECT, include-all: true, hidden: true, tolerance: 50 }
+# 故障转移锚点。按顺序使用节点，当前面节点断线时自动切换到下一个可用节点
+x-fallback:     &fallback     { type: fallback, url: "https://www.gstatic.com/generate_204", interval: 300, empty-fallback: REJECT }
+
+# 国家与地区过滤锚点。通过正则表达式，提取节点名称中的中英文地名或缩写，将节点归类到对应国家
+# 机场与特定功能节点过滤锚点。提取包含特定用途或特殊标识的节点
+x-filter-hk:    &filter-hk    "^(?i)(?=.*(香港|港深|深港|沪港|广港|陆港|(?<![a-zA-Z])(hk|hkg)(?![a-zA-Z])|hongkong|hong kong|🇭🇰))(?!.*(排除)).*$"
+x-filter-tw:    &filter-tw    "^(?i)(?=.*(台湾|台北|台中|台南|台东|湾湾|(?<![a-zA-Z])(tpe|khh|tsa)(?![a-zA-Z])|taiwan|taipei|🇹🇼|🇼🇸))(?!.*(排除)).*$"
+x-filter-jp:    &filter-jp    "^(?i)(?=.*(日本|东京|大阪|京都|神奈川|琦玉|(?<![a-zA-Z])(nrt|hnd|kix|cts|fuk)(?![a-zA-Z])|japan|tokyo|🇯🇵))(?!.*(排除)).*$"
+x-filter-sg:    &filter-sg    "^(?i)(?=.*(新加坡|坡县|坡|狮城|(?<![a-zA-Z])(sin|xsp)(?![a-zA-Z])|singapore|🇸🇬))(?!.*(排除)).*$"
+x-filter-kr:    &filter-kr    "^(?i)(?=.*(韩国|韓國|首尔|首爾|南朝鲜|(?<![a-zA-Z])(icn|gmp|pus)(?![a-zA-Z])|korea|seoul|🇰🇷))(?!.*(排除)).*$"
+x-filter-us:    &filter-us    "^(?i)(?=.*(美国|美东|美西|美中|美南|美港|美日|中美|美专|(?<![a-zA-Z])(usa|lax|sfo|jfk|sjc)(?![a-zA-Z])|america|united states|🇺🇸))(?!.*(排除)).*$"
+#daier
+x-filter-other: &filter-other "^(?!.*(香港|港深|深港|沪港|广港|陆港|hk1|hkg|hongkong|hong kong|🇭🇰|台湾|台北|台中|台南|台东|湾湾|tw1|tpe|khh|tsa|taiwan|taipei|🇹🇼|🇼🇸|日本|东京|大阪|京都|神奈川|琦玉|jp1|nrt|hnd|kix|cts|fuk|japan|tokyo|🇯🇵|新加坡|坡县|坡|狮城|sg1|sin|xsp|singapore|🇸🇬|韩国|韓國|首尔|首爾|南朝鲜|kr1|icn|gmp|pus|korea|seoul|🇰🇷|美国|美东|美西|美中|美南|美港|美日|中美|美专|us1|usa|lax|sfo|jfk|sjc|america|united states|🇺🇸)).*$"
+# 机场节点过滤
+x-filter-ykk:    &filter-ykk    "^(?=.*YKK).*$"
+x-filter-liangxin:    &filter-liangxin    "^(?=.*良心).*$"
+x-filter-peiqian:    &filter-peiqian    "^(?=.*赔钱).*$"
+x-filter-free:    &filter-free    "^(?i)(?=.*(免费|Free)).*$"
+# 必须包含“良心”或“赔钱”，同时排除日本 / JP / Japan / 🇯🇵 节点
+x-filter-emby-jp-minus:    &filter-emby-jp-minus    "^(?!.*(日本|JP|Japan|🇯🇵)).*(良心|赔钱).*$"
+
+# YouTube 去广告节点 必须包含 YT-CN 同时排除 YKK
+x-filter-youtube-ad:    &filter-youtube-ad    "^(?=.*YT-CN)(?!.*YKK).*$"
+
+# 匹配 0.01 / 0.1 / 0.5 同时排除日本 / JP / Japan / 🇯🇵
+x-filter-njp-low:    &filter-njp-low    "^(?!.*(日本|JP|Japan|🇯🇵)).*(0.01|0.1|0.5).*$"
+# TikTok 解锁节点
+x-filter-tiktok:    &filter-tiktok    "^(?=.*TK).*$"
+
+# Gemini 解锁节点 必须包含 GM 排除 YT-CN
+x-filter-gemini:    &filter-gemini    "^(?=.*GM)(?!.*YT-CN).*$"
+# GPT 解锁节点
+x-filter-gpt:    &filter-gpt    "^(?=.*GPT).*$"
+# X 解锁节点
+x-filter-x:    &filter-x    "^(?=.*X).*$"
+
+# 快捷策略排布锚点。提前写好节点的选用顺序，方便下面不同场景调用
+x-oversea:      &oversea      [故障转移, 策略集, 全球手动, 香港策略, 台湾策略, 日本策略, 狮城策略, 韩国策略, 美国策略, DIRECT]
+x-direct:       &direct       [DIRECT, 策略集, 故障转移, 全球手动, 香港策略, 台湾策略, 日本策略, 狮城策略, 韩国策略, 美国策略]
+x-us-first:     &us-first     [美国策略, 策略集, 故障转移, 全球手动, 香港策略, 台湾策略, 日本策略, 狮城策略, 韩国策略, DIRECT]
+x-hk-first:     &hk-first     [香港策略, 策略集, 故障转移, 全球手动, 台湾策略, 日本策略, 狮城策略, 韩国策略, 美国策略, DIRECT]
+x-sg-first:     &sg-first     [狮城策略, 策略集, 故障转移, 全球手动, 香港策略, 台湾策略, 日本策略, 韩国策略, 美国策略, DIRECT]
+x-jp-first:     &jp-first     [日本策略, 策略集, 故障转移, 全球手动, 香港策略, 台湾策略, 狮城策略, 韩国策略, 美国策略, DIRECT]
+x-Strategy:     &Strategy     [DIRECT, 故障转移, 全球手动, 🚁YKK♻️, 🚁赔钱♻️, 🚁良心♻️, 🚁免费♻️, emby-🇯🇵♻️, YouTube📵广告♻️, 📺𝗡𝗝𝗣-低倍♻️, TikTok🔓♻️, Gemini🔓♻️, GPT🔓♻️, X🔓♻️]
+x-zhineng:      &zhineng      [Gemini🔓♻️, GPT🔓♻️, X🔓♻️, 全球手动, 美国策略, 香港策略, 台湾策略, 日本策略, 狮城策略, 韩国策略, 故障转移]
+x-yingyin:      &yingyin      [emby-🇯🇵♻️, YouTube📵广告♻️, 📺𝗡𝗝𝗣-低倍♻️, TikTok🔓♻️, 🚁YKK♻️, 🚁赔钱♻️, 🚁良心♻️, 🚁免费♻️, 全球手动, 故障转移]
+
+# 外部规则集格式声明锚点，设定每 86400 秒 (24小时) 更新一次
+x-rule-set-domain: &rule-set-domain { type: http, behavior: domain, format: mrs, interval: 86400 }
+x-rule-set-ipcidr: &rule-set-ipcidr { type: http, behavior: ipcidr, format: mrs, interval: 86400 }
+#daier 纯文本纯域名规则集锚点（适用于你的 ManualDirect.txt 纯域名列表）
+x-rule-set-text-domain: &rule-set-text-domain { type: http, behavior: domain, format: text, interval: 86400 }
+#daier 纯文本经典规则集锚点（适用于包含 DOMAIN-SUFFIX, IP-CIDR 等带前缀的混合列表）
+#x-rule-set-text-classical: &rule-set-text-classical { type: http, behavior: classical, format: text, interval: 86400 }
+
+#daier
+# >>> 订阅源配置 <<<
+proxy-providers:
+# 引入外部的订阅链接，利用上面写好的基础参数(base-provider)定时拉取节点
+   🫟𝑺𝒖𝒃𝒔: {<<: *base-provider, url: 'http://mylovedaier.synology.me:8299/sb9ht4Qn0o3sv1uFqZfM/download/sub-llxx?target=ClashMeta'}
+   🫟Free:   {<<: *base-provider, url: 'http://mylovedaier.synology.me:8299/sb9ht4Qn0o3sv1uFqZfM/download/collection/mfjd?target=ClashMeta'}
+
+# >>> 自定义代理节点 <<<
+proxies:
+# 用于手动添加单一节点，目前处于注释禁用状态
+  # - name: "ss1"
+  #   type: ss
+  #   server: server
+  #   port: 443
+  #   cipher: aes-128-gcm
+  #   password: password
+
+# >>> 基础设置 <<<
+mode: rule                  # 运行模式设置为规则模式，按下方设定好的路由规则进行分流
+port: 7890                  # 纯 HTTP 代理监听端口
+socks-port: 7891            # 纯 SOCKS5 代理监听端口
+redir-port: 7892            # 透明代理重定向端口
+mixed-port: 60012           # #daier 混合代理端口，同时支持 HTTP 和 SOCKS5
+tproxy-port: 7895           # TProxy 透明代理端口
+ipv6: true                  # #daier允许内核处理 IPv6 流量
+allow-lan: true             # 允许局域网内的其他设备连接到这些端口使用代理
+unified-delay: true         # 统一延迟计算方式
+tcp-concurrent: true        # 开启 TCP 并发，提升连接建立速度
+log-level: silent           # 日志级别，此处设置为静默，不输出日志以节省资源
+bind-address: '*'           # 绑定所有网络接口
+find-process-mode: 'always' # 始终开启进程匹配，用于识别具体是哪个软件发出的请求
+keep-alive-interval: 15     # TCP 保活间隔时间
+keep-alive-idle: 600        # TCP 保活空闲时间
+authentication: [sinspired:sinspired] # 开启局域网连接身份验证，格式为 账号:密码
+skip-auth-prefixes: [127.0.0.1/8, '::1/128'] # 本机访问豁免身份验证
+experimental: {quic-go-disable-gso: true} # 禁用 QUIC 的 GSO 特性，解决部分设备的兼容性问题
+ 
+# >>> 控制面板设置 <<<
+external-ui-url: https://github.com/Zephyruso/zashboard/releases/latest/download/dist.zip # 面板下载地址
+external-ui-name: zashboard # 面板名称
+external-ui: ui             # 面板存放目录
+external-controller: 0.0.0.0:9090 # #daier 本地及局域网均可通过 9090 端口访问控制面板
+secret: sinspired           # 访问控制面板的鉴权密钥
+profile: {store-selected: true, store-fake-ip: true} # 记忆用户的节点选择和缓存虚拟IP
+
+# >>> 流量嗅探设置 <<<
+sniffer:
+  enable: true              # 开启嗅探
+  sniff:
+  # 强制解析 HTTP/TLS/QUIC 流量中的真实域名
+    HTTP:  {ports: [80, 8080-8880], override-destination: true}
+    TLS:   {ports: [443, 8443]}
+    QUIC:  {ports: [443, 8443]}
+  skip-domain: ["Mijia Cloud", "+.push.apple.com"]   # 跳过特定域名的嗅探以防断连
+
+# >>> TUN虚拟网卡设置 <<<
+tun:
+  enable: false             # 此处设置为关闭状态。开启后可接管电脑全部流量
+  stack: mixed              # 协议栈设定为混合模式
+  dns-hijack: ["any:53", "tcp://any:53"] # 劫持所有发往 53 端口的 DNS 请求
+  auto-route: true          # 自动配置路由表
+  auto-redirect: true       # 自动重定向流量
+  auto-detect-interface: true # 自动探测网络接口
+
+# >>> DNS设置 <<<
+dns:
+  enable: true              # 开启内置 DNS 解析
+  ipv6: false               # 关闭 IPv6 的 DNS 解析 (只返回 IPv4 地址)
+  enhanced-mode: fake-ip    # 开启 Fake-IP 模式，加快网页响应速度并解决 DNS 污染
+  fake-ip-range: 198.18.0.1/16 # 分配给 Fake-IP 的虚拟 IP 地址段
+  default-nameserver: [119.29.29.29, 180.184.1.1, 223.5.5.5] # 基础域名解析服务器
+  nameserver: [https://dns.alidns.com/dns-query, https://doh.pub/dns-query] # 加密的 DNS 解析服务器
+  fake-ip-filter: ["+.lan", "*.local", "+.gstatic.com", "+.miwifi.com", "+.market.xiaomi.com", "+.push.apple.com"] # 这些域名不使用虚拟IP，直接返回真实IP
+
+
+# >>> 代理策略组 <<<
+proxy-groups:
+    #daier 流量信息 用于展示机场流量信息的独立分组
+  - { name: 🫟流量信息🫟, type: select, use: [🫟𝑺𝒖𝒃𝒔, 🫟Free], filter: '(?i)(⏰|🟢|\d{2}/\d{2}\s\d{2}:\d{2}|流量|到期|剩余|过期)' }
+  
+  # 路由策略
+  #daier 中控策略组 核心策略集，按功能分类的子策略组，供用户手动选择总控路线 
+  - { name: 策略集, type: select, proxies: [🛩️机场, 📺影音, 🔒解锁], icon: https://raw.githubusercontent.com/Koolson/Qure/master/IconSet/Color/Proxy.png }
+  - { name: 🛩️机场, type: select, proxies: [🚁YKK♻️, 🚁赔钱♻️, 🚁良心♻️, 🚁免费♻️], hidden: true, icon: https://raw.githubusercontent.com/Koolson/Qure/master/IconSet/Color/Airport.png }
+  - { name: 📺影音, type: select, proxies: [emby-🇯🇵♻️, YouTube📵广告♻️, 📺𝗡𝗝𝗣-低倍♻️], hidden: true, icon: https://raw.githubusercontent.com/Koolson/Qure/master/IconSet/Color/Streaming.png }
+  - { name: 🔒解锁, type: select, proxies: [TikTok🔓♻️, Gemini🔓♻️, GPT🔓♻️, X🔓♻️], hidden: true, icon: https://raw.githubusercontent.com/Koolson/Qure/master/IconSet/Color/Unlock.png }
+  # 具体应用场景的路由策略。引用了上方配置好的 x-us-first 等锚点，实现特定应用走特定地区的流量
+  - { name: 即时通讯, type: select, proxies: *sg-first, icon: https://github.com/Koolson/Qure/raw/master/IconSet/Color/Telegram_X.png }
+  - { name: 社交平台, type: select, proxies: *us-first, icon: https://github.com/Koolson/Qure/raw/master/IconSet/Color/Twitter.png }
+  - { name: 人工智能, type: select, proxies: *zhineng, icon: https://github.com/Koolson/Qure/raw/master/IconSet/Color/AI.png }
+  - { name: 开发服务, type: select, proxies: *us-first, icon: https://github.com/Koolson/Qure/raw/master/IconSet/Color/GitHub.png }
+  - { name: EMBY,    type: select, proxies: *yingyin, icon: https://github.com/Koolson/Qure/raw/master/IconSet/Color/Emby.png }
+  - { name: TikTok, type: select, proxies: *yingyin, icon: https://raw.githubusercontent.com/Koolson/Qure/master/IconSet/Color/TikTok.png }
+  - { name: YouTube, type: select, proxies: *yingyin, icon: https://raw.githubusercontent.com/Koolson/Qure/master/IconSet/Color/YouTube.png }
+  - { name: 国际媒体, type: select, proxies: *us-first, icon: https://github.com/Koolson/Qure/raw/master/IconSet/Color/Streaming.png }
+  - { name: 谷歌服务, type: select, proxies: *us-first, icon: https://github.com/Koolson/Qure/raw/master/IconSet/Color/Google_Search.png }
+  - { name: 脸书服务, type: select, proxies: *us-first, icon: https://github.com/Koolson/Qure/raw/master/IconSet/Color/Facebook.png }
+  - { name: 微软服务, type: select, proxies: *us-first, icon: https://github.com/Koolson/Qure/raw/master/IconSet/Color/Microsoft.png }
+  - { name: 苹果服务, type: select, proxies: *direct, icon: https://github.com/Koolson/Qure/raw/master/IconSet/Color/Apple_1.png }
+  #daier 手动输入直连或代理域名
+  - { name: 手动直连, type: select, proxies: *Strategy, icon: https://raw.githubusercontent.com/LovedGM/Quantumult-X-TuBiao/main/zishi-cs/zs18.png }
+  - { name: 手动代理, type: select, proxies: *Strategy, icon: https://raw.githubusercontent.com/LovedGM/Quantumult-X-TuBiao/main/zishi-cs/zs39.png }
+  - { name: 网络测试, type: select, proxies: *oversea, icon: https://github.com/Koolson/Qure/raw/master/IconSet/Color/Speedtest.png }
+  - { name: 国外流量, type: select, proxies: *Strategy, icon: https://github.com/Koolson/Qure/raw/master/IconSet/Color/Global.png }
+  - { name: 国内流量, type: select, proxies: *direct, icon: https://github.com/Koolson/Qure/raw/master/IconSet/Color/China.png }
+  - { name: 漏网之鱼, type: select, proxies: *Strategy, icon: https://github.com/Koolson/Qure/raw/master/IconSet/Color/Final.png }
+  
+  # 自动选择 全局故障转移组 ps系统严格按照你排好的节点顺序来使用。只要排在第一位的节点是通的，无论它有多慢，系统都会死死咬住它用。只有当第一名彻底宕机、完全连不上时，系统才会顺延去使用第二名。等第一名恢复正常后，系统又会乖乖切回第一名。这种模式极其适合需要绝对主力且只要一条备用线路防断网的场景。
+  - { name: 故障转移, <<: *fallback, proxies: [美国策略, 日本策略, 狮城策略, 韩国策略, 香港策略, 台湾策略], icon: https://github.com/Koolson/Qure/raw/master/IconSet/Color/ULB.png }
+
+  # 手动选择 全球手动选择组
+  - { name: 全球手动, type: select, include-all: true, icon: https://github.com/Koolson/Qure/raw/master/IconSet/Color/Clubhouse.png }
+
+  
+  # 自动测速 区域自动测速分组定义，调用开头的 x-url-test 锚点逻辑 ps系统每隔几秒钟会让所有节点去访问同一个测试网页。哪一个节点最先返回数据，也就是延迟最低，系统就会自动把它选为主力。如果使用过程中当前节点变慢了，系统发现有其他节点跑得更快，就会自动切换过去，确保你的网络始终走在最快的通道上。
+  - { name: 香港策略, <<: *url-test, filter: *filter-hk, icon: https://github.com/Koolson/Qure/raw/master/IconSet/Color/Hong_Kong.png }
+  - { name: 台湾策略, <<: *url-test, filter: *filter-tw, icon: https://github.com/Koolson/Qure/raw/master/IconSet/Color/Taiwan.png }
+  - { name: 日本策略, <<: *url-test, filter: *filter-jp, icon: https://github.com/Koolson/Qure/raw/master/IconSet/Color/Japan.png }
+  - { name: 狮城策略, <<: *url-test, filter: *filter-sg, icon: https://github.com/Koolson/Qure/raw/master/IconSet/Color/Singapore.png }
+  - { name: 韩国策略, <<: *url-test, filter: *filter-kr, icon: https://github.com/Koolson/Qure/raw/master/IconSet/Color/Korea.png }
+  - { name: 美国策略, <<: *url-test, filter: *filter-us, icon: https://github.com/Koolson/Qure/raw/master/IconSet/Color/United_States.png }
+
+  #daier
+  - { name: 他国策略, <<: *url-test, filter: *filter-other, icon: https://raw.githubusercontent.com/Koolson/Qure/master/IconSet/Color/World_Map.png }
+  - { name: 🚁YKK♻️, <<: *url-test, filter: *filter-ykk, icon: https://github.com/Koolson/Qure/raw/master/IconSet/Color/Auto.png }
+  - { name: 🚁良心♻️, <<: *url-test, filter: *filter-liangxin, icon: https://github.com/Koolson/Qure/raw/master/IconSet/Color/Auto.png }
+  - { name: 🚁赔钱♻️, <<: *url-test, filter: *filter-peiqian, icon: https://github.com/Koolson/Qure/raw/master/IconSet/Color/Auto.png }
+  - { name: 🚁免费♻️, <<: *url-test, filter: *filter-free, icon: https://github.com/Koolson/Qure/raw/master/IconSet/Color/Auto.png }
+  - { name: emby-🇯🇵♻️, <<: *url-test, filter: *filter-emby-jp-minus, icon: https://github.com/Koolson/Qure/raw/master/IconSet/Color/Auto.png }
+  - { name: YouTube📵广告♻️, <<: *url-test, filter: *filter-youtube-ad, icon: https://github.com/Koolson/Qure/raw/master/IconSet/Color/Auto.png }
+  - { name: 📺𝗡𝗝𝗣-低倍♻️, <<: *url-test, filter: *filter-njp-low, icon: https://github.com/Koolson/Qure/raw/master/IconSet/Color/Auto.png }
+  - { name: TikTok🔓♻️, <<: *url-test, filter: *filter-tiktok, icon: https://github.com/Koolson/Qure/raw/master/IconSet/Color/Auto.png }
+  - { name: Gemini🔓♻️, <<: *url-test, filter: *filter-gemini, icon: https://github.com/Koolson/Qure/raw/master/IconSet/Color/Auto.png }
+  - { name: GPT🔓♻️, <<: *url-test, filter: *filter-gpt, icon: https://github.com/Koolson/Qure/raw/master/IconSet/Color/Auto.png }
+  - { name: X🔓♻️, <<: *url-test, filter: *filter-x, icon: https://github.com/Koolson/Qure/raw/master/IconSet/Color/Auto.png }
+
+  
+# >>> 规则路由 (从上往下顺序匹配，一旦命中立即执行对应动作) <<<
+rules:  
+  # 本地/私有 本地局域网与私有 IP 流量直接放行 (DIRECT)，不走代理
+  - RULE-SET,Private,DIRECT
+  - RULE-SET,PrivateIP,DIRECT,no-resolve
+  
+  # 网络测试 
+  - RULE-SET,Speedtest,网络测试
+
+  # 自定义应用规则补全
+  - RULE-SET,TikTok,TikTok
+  - RULE-SET,YouTube,YouTube
+  
+  # 即时通讯
+  - RULE-SET,TM,即时通讯
+  - RULE-SET,Telegram,即时通讯
+  - RULE-SET,TelegramIP,即时通讯,no-resolve
+
+  # 社交平台
+  - RULE-SET,SocialMedia,社交平台
+  - RULE-SET,SocialMediaIP,社交平台,no-resolve
+
+  # 人工智能
+  - RULE-SET,AI,人工智能
+  - RULE-SET,AIIP,人工智能,no-resolve
+
+  # 开发服务
+  - RULE-SET,Dev,开发服务
+
+  # 国际媒体
+  - RULE-SET,Emby,EMBY
+  - RULE-SET,EmbyIP,EMBY,no-resolve
+  - RULE-SET,Streaming,国际媒体
+  - RULE-SET,StreamingIP,国际媒体,no-resolve
+
+  # 平台服务
+  - RULE-SET,Google,谷歌服务
+  - RULE-SET,GoogleIP,谷歌服务,no-resolve
+  - RULE-SET,Microsoft,微软服务
+  - RULE-SET,Facebook,脸书服务
+  - RULE-SET,Apple,苹果服务
+  
+  # 手动输入域名
+  - RULE-SET,ManualDirect,手动直连
+  - RULE-SET,ManualProxy,手动代理
+  
+  # 国外流量 未被上方细致分类捕捉到的所有海外流量，交由国外流量策略组处理
+  - RULE-SET,Proxy,国外流量
+  - RULE-SET,ProxyIP,国外流量,no-resolve
+
+  # 国内流量 明确属于中国大陆的流量，直接交由国内流量策略组直连处理
+  - RULE-SET,China,国内流量
+  - RULE-SET,ChinaIP,国内流量,no-resolve
+
+  # 兜底规则 以上所有规则都没有命中的流量，交由漏网之鱼策略组处理
+  - MATCH,漏网之鱼
+
+# >>> 规则集提供者 <<<
+# 在这里配置上面规则所需用到的具体域名和 IP 清单的外部下载地址
+rule-providers:
+  #Tracking:       { <<: *rule-set-domain, url: https://github.com/666OS/rules/raw/release/mihomo/domain/Tracking.mrs }
+  #Advertising:    { <<: *rule-set-domain, url: https://github.com/666OS/rules/raw/release/mihomo/domain/Advertising.mrs } 
+  Private:        { <<: *rule-set-domain, url: https://github.com/666OS/rules/raw/release/mihomo/domain/Private.mrs }
+  Apple:          { <<: *rule-set-domain, url: https://github.com/666OS/rules/raw/release/mihomo/domain/Apple.mrs }
+  Telegram:       { <<: *rule-set-domain, url: https://github.com/666OS/rules/raw/release/mihomo/domain/Telegram.mrs }
+  TM:             { <<: *rule-set-domain, url: https://github.com/666OS/rules/raw/release/mihomo/domain/TM.mrs }
+  SocialMedia:    { <<: *rule-set-domain, url: https://github.com/666OS/rules/raw/release/mihomo/domain/SocialMedia.mrs }
+  AI:             { <<: *rule-set-domain, url: https://github.com/666OS/rules/raw/release/mihomo/domain/AI.mrs }
+  Dev:            { <<: *rule-set-domain, url: https://github.com/666OS/rules/raw/release/mihomo/domain/Dev.mrs }
+  YouTube:        { <<: *rule-set-domain, url: https://github.com/666OS/rules/raw/release/mihomo/domain/YouTube.mrs }
+  #Netflix:        { <<: *rule-set-domain, url: https://github.com/666OS/rules/raw/release/mihomo/domain/Netflix.mrs }
+  #Spotify:        { <<: *rule-set-domain, url: https://github.com/666OS/rules/raw/release/mihomo/domain/Spotify.mrs }
+  #Disney:         { <<: *rule-set-domain, url: https://github.com/666OS/rules/raw/release/mihomo/domain/Disney.mrs }
+  Emby:           { <<: *rule-set-domain, url: https://github.com/666OS/rules/raw/release/mihomo/domain/Emby.mrs }
+  Streaming:      { <<: *rule-set-domain, url: https://github.com/666OS/rules/raw/release/mihomo/domain/Streaming.mrs }
+  Proxy:          { <<: *rule-set-domain, url: https://github.com/666OS/rules/raw/release/mihomo/domain/Proxy.mrs }
+  China:          { <<: *rule-set-domain, url: https://github.com/666OS/rules/raw/release/mihomo/domain/China.mrs }
+  Speedtest:      { <<: *rule-set-domain, url: https://github.com/666OS/rules/raw/release/mihomo/domain/Speedtest.mrs }
+  #Games:          { <<: *rule-set-domain, url: https://github.com/666OS/rules/raw/release/mihomo/domain/Games.mrs }
+  Crypto:         { <<: *rule-set-domain, url: https://github.com/666OS/rules/raw/release/mihomo/domain/Crypto.mrs }
+  Google:         { <<: *rule-set-domain, url: https://github.com/666OS/rules/raw/release/mihomo/domain/Google.mrs }
+  Microsoft:      { <<: *rule-set-domain, url: https://github.com/666OS/rules/raw/release/mihomo/domain/Microsoft.mrs }
+  Facebook:       { <<: *rule-set-domain, url: https://github.com/666OS/rules/raw/release/mihomo/domain/Facebook.mrs }
+  TikTok:         { <<: *rule-set-domain, url: https://github.com/666OS/rules/raw/release/mihomo/domain/TikTok.mrs }
+  #daier 调用纯文本域名锚点
+  ManualDirect:   { <<: *rule-set-text-domain, url: 'https://git.daier.ccwu.cc:520/Daier/baby/raw/branch/main/ManualDirect.txt' }
+  ManualProxy:    { <<: *rule-set-text-domain, url: 'https://git.daier.ccwu.cc:520/Daier/baby/raw/branch/main/ManualProxy.txt' }
+  # 调用纯文本经典混合锚点示例
+  #Forward_List: { <<: *rule-set-text-classical, url: 'https://git.daier.ccwu.cc:520/Daier/baby/raw/branch/main/forward.list' }
+  PrivateIP:      { <<: *rule-set-ipcidr, url: https://github.com/666OS/rules/raw/release/mihomo/ip/Private.mrs }
+  TelegramIP:     { <<: *rule-set-ipcidr, url: https://github.com/666OS/rules/raw/release/mihomo/ip/Telegram.mrs }
+  SocialMediaIP:  { <<: *rule-set-ipcidr, url: https://github.com/666OS/rules/raw/release/mihomo/ip/SocialMedia.mrs }
+  AIIP:           { <<: *rule-set-ipcidr, url: https://github.com/666OS/rules/raw/release/mihomo/ip/AI.mrs }
+  NetflixIP:      { <<: *rule-set-ipcidr, url: https://github.com/666OS/rules/raw/release/mihomo/ip/Netflix.mrs }
+  EmbyIP:         { <<: *rule-set-ipcidr, url: https://github.com/666OS/rules/raw/release/mihomo/ip/Emby.mrs }
+  StreamingIP:    { <<: *rule-set-ipcidr, url: https://github.com/666OS/rules/raw/release/mihomo/ip/Streaming.mrs }
+  ProxyIP:        { <<: *rule-set-ipcidr, url: https://github.com/666OS/rules/raw/release/mihomo/ip/Proxy.mrs }
+  ChinaIP:        { <<: *rule-set-ipcidr, url: https://github.com/666OS/rules/raw/release/mihomo/ip/China.mrs }
+  GoogleIP:       { <<: *rule-set-ipcidr, url: https://github.com/666OS/rules/raw/release/mihomo/ip/Google.mrs }
